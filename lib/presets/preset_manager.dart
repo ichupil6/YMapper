@@ -54,6 +54,22 @@ class PresetManager {
         imageWidth: 8192,
         imageHeight: 6144),
     CameraPreset(
+        name: "DJI Matrice 4E Wide (20 MP)",
+        defaultPreset: true,
+        sensorWidth: 17.3,
+        sensorHeight: 13.0,
+        focalLength: 12.3,
+        imageWidth: 5280,
+        imageHeight: 3956),
+    CameraPreset(
+        name: "DJI Matrice 4T Wide (48 MP)",
+        defaultPreset: true,
+        sensorWidth: 9.6,
+        sensorHeight: 7.2,
+        focalLength: 6.7,
+        imageWidth: 8064,
+        imageHeight: 6048),
+    CameraPreset(
         name: "DJI Mini 2 (12 MP)",
         defaultPreset: true,
         sensorWidth: 6.3,

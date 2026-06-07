@@ -70,6 +70,9 @@ class _HomeLayoutState extends State<HomeLayout> with TickerProviderStateMixin {
       listenables.rotation = aircraftSettings.rotation;
       listenables.delayAtWaypoint = aircraftSettings.delay;
       listenables.cameraAngle = aircraftSettings.cameraAngle;
+      listenables.matrice4SubType = aircraftSettings.matrice4SubType;
+      listenables.obliqueCameraAngle = aircraftSettings.obliqueCameraAngle;
+      listenables.routeMode = aircraftSettings.routeMode;
       listenables.onFinished = aircraftSettings.finishAction;
       listenables.rcLostAction = aircraftSettings.rcLostAction;
       listenables.groundOffset = aircraftSettings.groundOffset;
@@ -219,13 +222,23 @@ class _HomeLayoutState extends State<HomeLayout> with TickerProviderStateMixin {
       groundOffset: listenables.groundOffset.toDouble(),
     );
 
-    var waypoints = droneMapping.generateWaypoints(
-        listenables.polygon,
-        listenables.createCameraPoints,
-        listenables.fillGrid,
-        listenables.homePoint);
+    final routes = droneMapping.generateMappingRoutes(
+      listenables.polygon,
+      listenables.createCameraPoints,
+      fillGrid: listenables.fillGrid,
+      homePoint: listenables.homePoint,
+      routeMode: listenables.routeMode,
+      nadirGimbalPitch: listenables.cameraAngle,
+      obliqueGimbalPitch: listenables.obliqueCameraAngle,
+    );
+    var waypoints = routes.expand((route) => route.waypoints).toList();
+    listenables.mappingRoutes = routes;
     listenables.photoLocations = waypoints;
-    if (waypoints.isEmpty) return;
+    if (waypoints.isEmpty) {
+      listenables.routeLines = [];
+      listenables.flightLine = null;
+      return;
+    }
 
     _photoMarkers.clear();
 
@@ -259,10 +272,24 @@ class _HomeLayoutState extends State<HomeLayout> with TickerProviderStateMixin {
         ),
       ));
     }
-    listenables.flightLine = Polyline(
-        points: waypoints,
-        strokeWidth: 3,
-        color: Theme.of(context).colorScheme.tertiary);
+    final routeColors = [
+      Theme.of(context).colorScheme.tertiary,
+      Colors.deepOrange,
+      Colors.purple,
+      Colors.teal,
+      Colors.indigo,
+    ];
+    listenables.routeLines = [
+      for (int i = 0; i < routes.length; i++)
+        Polyline(
+          points: routes[i].waypoints,
+          strokeWidth: routes[i].nadir ? 3 : 2,
+          color: routeColors[i % routeColors.length],
+        )
+    ];
+    listenables.flightLine = listenables.routeLines.isNotEmpty
+        ? listenables.routeLines.first
+        : null;
 
     // Draw directional arrow markers
     _flightLineArrowMarkers.clear();
@@ -381,6 +408,8 @@ class _HomeLayoutState extends State<HomeLayout> with TickerProviderStateMixin {
             listenables.photoLocations.clear();
             _photoMarkers.clear();
             listenables.flightLine = null;
+            listenables.routeLines = [];
+            listenables.mappingRoutes = [];
             listenables.takeoffLine = null;
             listenables.returnLine = null;
             _takeoffLineArrowMarkers.clear();
@@ -435,8 +464,7 @@ class _HomeLayoutState extends State<HomeLayout> with TickerProviderStateMixin {
                 if (listenables.homePoint != null)
                   PolylineLayer(
                     polylines: [
-                      if (listenables.flightLine != null)
-                        listenables.flightLine!,
+                      ...listenables.routeLines,
                       if (listenables.takeoffLine != null)
                         listenables.takeoffLine!, // dotted start line from home
                       if (listenables.returnLine != null)

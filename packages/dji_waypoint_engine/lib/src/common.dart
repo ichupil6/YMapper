@@ -19,6 +19,8 @@ class DroneInfo extends XmlElement {
   /// 77（M3E/M3T/M3M
   ///
   /// 91（M3D/M3TD）
+  ///
+  /// 99 (DJI Matrice 4 Series: M4E/M4T)
   final int droneEnumValue;
 
   /// Drone sub type
@@ -51,7 +53,19 @@ class DroneInfo extends XmlElement {
   /// 1 (M3TD)
   ///
   /// 2 (M3M)
+  ///
+  /// <hr>
+  ///
+  /// when droneEnumValue is 99:
+  ///
+  /// 0 (M4E)
+  ///
+  /// 1 (M4T)
   final int droneSubEnumValue;
+
+  static const int matrice4SeriesEnumValue = 99;
+  static const int matrice4eSubEnumValue = 0;
+  static const int matrice4tSubEnumValue = 1;
 
   DroneInfo({required this.droneEnumValue, this.droneSubEnumValue = 0})
       : super(XmlName("wpml:droneInfo"), [], [

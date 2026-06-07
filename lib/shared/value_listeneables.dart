@@ -1,3 +1,4 @@
+import 'package:ymapper/core/drone_mapping_engine.dart';
 import 'package:ymapper/presets/camera_preset.dart';
 import 'package:dji_waypoint_engine/engine.dart';
 import 'package:flutter/material.dart';
@@ -56,6 +57,31 @@ class ValueListenables extends ChangeNotifier {
   int get cameraAngle => _cameraAngle.value;
   set cameraAngle(int value) {
     _cameraAngle.value = value;
+    notifyListeners();
+  }
+
+
+  /// DJI Matrice 4 sub model: 0 = M4E, 1 = M4T.
+  final _matrice4SubType = ValueNotifier<int>(DroneInfo.matrice4eSubEnumValue);
+  int get matrice4SubType => _matrice4SubType.value;
+  set matrice4SubType(int value) {
+    _matrice4SubType.value = value;
+    notifyListeners();
+  }
+
+  /// Flight route template.
+  final _routeMode = ValueNotifier<MappingRouteMode>(MappingRouteMode.singleNadir);
+  MappingRouteMode get routeMode => _routeMode.value;
+  set routeMode(MappingRouteMode value) {
+    _routeMode.value = value;
+    notifyListeners();
+  }
+
+  /// Oblique gimbal pitch in degrees.
+  final _obliqueCameraAngle = ValueNotifier<int>(-45);
+  int get obliqueCameraAngle => _obliqueCameraAngle.value;
+  set obliqueCameraAngle(int value) {
+    _obliqueCameraAngle.value = value;
     notifyListeners();
   }
 
@@ -176,6 +202,23 @@ class ValueListenables extends ChangeNotifier {
   Polyline? get flightLine => _flightLine.value;
   set flightLine(Polyline? value) {
     _flightLine.value = value;
+    notifyListeners();
+  }
+
+
+  /// Generated route definitions.
+  final _mappingRoutes = ValueNotifier<List<MappingRoute>>([]);
+  List<MappingRoute> get mappingRoutes => _mappingRoutes.value;
+  set mappingRoutes(List<MappingRoute> value) {
+    _mappingRoutes.value = value;
+    notifyListeners();
+  }
+
+  /// Route preview lines.
+  final _routeLines = ValueNotifier<List<Polyline>>([]);
+  List<Polyline> get routeLines => _routeLines.value;
+  set routeLines(List<Polyline> value) {
+    _routeLines.value = value;
     notifyListeners();
   }
 
