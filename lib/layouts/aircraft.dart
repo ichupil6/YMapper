@@ -1,3 +1,4 @@
+import 'package:ymapper/core/drone_mapping_engine.dart';
 import 'package:ymapper/shared/aircraft_settings.dart';
 import 'package:dji_waypoint_engine/engine.dart';
 import 'package:ymapper/components/text_field.dart';
@@ -23,6 +24,9 @@ class _AircraftBarState extends State<AircraftBar> {
       rotation: listenables.rotation,
       delay: listenables.delayAtWaypoint,
       cameraAngle: listenables.cameraAngle,
+      matrice4SubType: listenables.matrice4SubType,
+      obliqueCameraAngle: listenables.obliqueCameraAngle,
+      routeMode: listenables.routeMode,
       finishAction: listenables.onFinished,
       rcLostAction: listenables.rcLostAction,
     ));
@@ -34,6 +38,43 @@ class _AircraftBarState extends State<AircraftBar> {
       return SingleChildScrollView(
         child: Column(
           children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        "Aircraft",
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SegmentedButton<int>(
+                      segments: const [
+                        ButtonSegment(
+                          value: DroneInfo.matrice4eSubEnumValue,
+                          label: Text("Matrice 4E"),
+                        ),
+                        ButtonSegment(
+                          value: DroneInfo.matrice4tSubEnumValue,
+                          label: Text("Matrice 4T"),
+                        ),
+                      ],
+                      selected: {listenables.matrice4SubType},
+                      onSelectionChanged: (selection) {
+                        setState(() {
+                          listenables.matrice4SubType = selection.first;
+                        });
+                        _updateSettings(listenables);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -71,6 +112,57 @@ class _AircraftBarState extends State<AircraftBar> {
                           _updateSettings(listenables);
                         },
                         decimals: 1),
+                  ],
+                ),
+              ),
+            ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        "Route template",
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SegmentedButton<MappingRouteMode>(
+                      segments: const [
+                        ButtonSegment(
+                          value: MappingRouteMode.singleNadir,
+                          label: Text("Ortho"),
+                          icon: Icon(Icons.grid_on),
+                        ),
+                        ButtonSegment(
+                          value: MappingRouteMode.djiOblique5,
+                          label: Text("5-route oblique"),
+                          icon: Icon(Icons.view_in_ar),
+                        ),
+                      ],
+                      selected: {listenables.routeMode},
+                      onSelectionChanged: (selection) {
+                        setState(() {
+                          listenables.routeMode = selection.first;
+                          if (listenables.routeMode ==
+                              MappingRouteMode.djiOblique5) {
+                            listenables.createCameraPoints = true;
+                          }
+                        });
+                        _updateSettings(listenables);
+                      },
+                    ),
+                    if (listenables.routeMode == MappingRouteMode.djiOblique5)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          "Exports 5 DJI WPML routes: 1 nadir ortho route and 4 oblique routes for 3D reconstruction.",
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -140,7 +232,7 @@ class _AircraftBarState extends State<AircraftBar> {
                       ),
                     ),
                     CustomTextField(
-                      labelText: "Camera angle (deg)",
+                      labelText: "Nadir camera angle (deg)",
                       min: -90,
                       max: 0,
                       defaultValue: listenables.cameraAngle,
@@ -149,6 +241,17 @@ class _AircraftBarState extends State<AircraftBar> {
                         _updateSettings(listenables);
                       },
                     ),
+                    if (listenables.routeMode == MappingRouteMode.djiOblique5)
+                      CustomTextField(
+                        labelText: "Oblique camera angle (deg)",
+                        min: -85,
+                        max: -10,
+                        defaultValue: listenables.obliqueCameraAngle,
+                        onChanged: (degrees) {
+                          listenables.obliqueCameraAngle = degrees.round();
+                          _updateSettings(listenables);
+                        },
+                      ),
                   ],
                 ),
               ),

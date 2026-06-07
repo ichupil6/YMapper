@@ -21,8 +21,10 @@ class _InfoState extends State<Info> {
       var photoTimeInterval = 0.0;
 
       if (listenables.polygon.length > 2) {
-        var mainDistance = DroneMappingEngine.calculateTotalDistance(
-            listenables.flightLine?.points ?? []);
+        var mainDistance = listenables.routeLines.fold<double>(
+            0,
+            (distance, line) => distance +
+                DroneMappingEngine.calculateTotalDistance(line.points));
         var takeoffDistance = DroneMappingEngine.calculateTotalDistance(
             listenables.takeoffLine?.points ?? []);
         var returnDistance = DroneMappingEngine.calculateTotalDistance(
@@ -82,6 +84,9 @@ class _InfoState extends State<Info> {
               child: Padding(
             padding: const EdgeInsets.all(8.0),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text("Routes: ${listenables.mappingRoutes.length}",
+                  style: const TextStyle(fontSize: 16)),
+              const Divider(),
               if (listenables.createCameraPoints)
                 Text("Number of photos: ${listenables.photoLocations.length}",
                     style: const TextStyle(fontSize: 16))

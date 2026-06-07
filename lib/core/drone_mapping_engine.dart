@@ -2,6 +2,33 @@ import 'dart:math';
 
 import 'package:latlong2/latlong.dart';
 
+/// Route generation mode for mapping missions.
+enum MappingRouteMode {
+  /// Single nadir/orthophoto route.
+  singleNadir,
+
+  /// DJI-style oblique set: 1 nadir route plus 4 oblique routes.
+  djiOblique5,
+}
+
+class MappingRoute {
+  final String name;
+  final List<LatLng> waypoints;
+  final double routeAngle;
+  final int gimbalPitch;
+  final int? headingAngle;
+  final bool nadir;
+
+  const MappingRoute({
+    required this.name,
+    required this.waypoints,
+    required this.routeAngle,
+    required this.gimbalPitch,
+    required this.nadir,
+    this.headingAngle,
+  });
+}
+
 class DroneMappingEngine {
   /// Altitude in meters
   final double altitude;
@@ -141,6 +168,72 @@ class DroneMappingEngine {
     area += localPolygon.last.x * localPolygon.first.y -
         localPolygon.first.x * localPolygon.last.y;
     return area.abs() / 2.0;
+  }
+
+
+  List<MappingRoute> generateMappingRoutes(
+    List<LatLng> polygon,
+    bool createCameraPoints, {
+    bool fillGrid = false,
+    LatLng? homePoint,
+    MappingRouteMode routeMode = MappingRouteMode.singleNadir,
+    int nadirGimbalPitch = -90,
+    int obliqueGimbalPitch = -45,
+  }) {
+    if (polygon.length < 3) return [];
+
+    if (routeMode == MappingRouteMode.singleNadir) {
+      return [
+        MappingRoute(
+          name: 'Nadir ortho',
+          waypoints: generateWaypoints(
+              polygon, createCameraPoints, fillGrid, homePoint),
+          routeAngle: angle,
+          gimbalPitch: nadirGimbalPitch,
+          nadir: true,
+        )
+      ];
+    }
+
+    final routeDefinitions = [
+      (name: 'Nadir ortho', angleOffset: 0.0, pitch: nadirGimbalPitch, nadir: true),
+      (name: 'Oblique north', angleOffset: 0.0, pitch: obliqueGimbalPitch, nadir: false),
+      (name: 'Oblique east', angleOffset: 90.0, pitch: obliqueGimbalPitch, nadir: false),
+      (name: 'Oblique south', angleOffset: 180.0, pitch: obliqueGimbalPitch, nadir: false),
+      (name: 'Oblique west', angleOffset: 270.0, pitch: obliqueGimbalPitch, nadir: false),
+    ];
+
+    return routeDefinitions.map((definition) {
+      final routeEngine = DroneMappingEngine(
+        altitude: altitude,
+        forwardOverlap: forwardOverlap,
+        sideOverlap: sideOverlap,
+        sensorWidth: sensorWidth,
+        sensorHeight: sensorHeight,
+        focalLength: focalLength,
+        imageWidth: imageWidth,
+        imageHeight: imageHeight,
+        angle: angle + definition.angleOffset,
+        groundOffset: groundOffset,
+      );
+
+      return MappingRoute(
+        name: definition.name,
+        waypoints: routeEngine.generateWaypoints(
+            polygon, createCameraPoints, fillGrid, homePoint),
+        routeAngle: angle + definition.angleOffset,
+        gimbalPitch: definition.pitch,
+        headingAngle: definition.nadir ? null : _normaliseHeading(angle + definition.angleOffset),
+        nadir: definition.nadir,
+      );
+    }).where((route) => route.waypoints.isNotEmpty).toList();
+  }
+
+  static int _normaliseHeading(double value) {
+    var heading = value.round() % 360;
+    if (heading > 180) heading -= 360;
+    if (heading < -180) heading += 360;
+    return heading;
   }
 
   // Generate waypoints within the polygon in a boustrophedon pattern

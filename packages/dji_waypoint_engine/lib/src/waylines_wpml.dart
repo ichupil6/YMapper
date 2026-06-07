@@ -36,15 +36,26 @@ class WaylinesWpml extends XmlDocument {
 class WpmlDocumentElement extends XmlElement {
   /// The mission information
   final MissionConfig missionConfig;
-  final FolderElement folderElement;
+  final List<FolderElement> folderElements;
 
   WpmlDocumentElement({
     required this.missionConfig,
-    required this.folderElement,
-  }) : super(
+    FolderElement? folderElement,
+    List<FolderElement>? folderElements,
+  })  : assert(
+          folderElement != null ||
+              (folderElements != null && folderElements.isNotEmpty),
+          "At least one folder element is required",
+        ),
+        folderElements = folderElements ?? [folderElement!],
+        super(
           XmlName("Document"),
           [], // No attributes
-          [missionConfig.copy(), folderElement.copy()],
+          [
+            missionConfig.copy(),
+            ...(folderElements ?? [folderElement!])
+                .map((folder) => folder.copy())
+          ],
         );
 }
 
@@ -235,7 +246,7 @@ class HeadingParam extends XmlElement {
             XmlElement.tag(
               "wpml:waypointHeadingAngle",
               children: [
-                XmlText(headingAngle != null ? headingMode.toString() : "0")
+                XmlText(headingAngle?.toString() ?? "0")
               ],
             ),
             poiPoint ??

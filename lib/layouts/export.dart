@@ -1,4 +1,5 @@
 import 'package:ymapper/core/drone_mapper_format.dart';
+import 'package:ymapper/core/drone_mapping_engine.dart';
 import 'package:ymapper/shared/map_provider.dart';
 import 'package:flutter_map/flutter_map.dart' hide Polygon;
 import 'package:geoxml/geoxml.dart';
@@ -47,10 +48,10 @@ class ExportBarState extends State<ExportBar> {
         /// For now this is the general speed of the mission
         globalTransitionalSpeed: listenables.speed,
 
-        /// Drone information for DJI Fly is default at 68
-        /// Unsure what other values there can be
-        /// Can't find official documentation
-        droneInfo: DroneInfo(droneEnumValue: 68));
+        /// DJI Matrice 4E/4T WPML enum values.
+        droneInfo: DroneInfo(
+            droneEnumValue: DroneInfo.matrice4SeriesEnumValue,
+            droneSubEnumValue: listenables.matrice4SubType));
 
     var template = TemplateKml(
         document: KmlDocumentElement(
@@ -64,9 +65,9 @@ class ExportBarState extends State<ExportBar> {
             /// Not sure why duplication is necessary
             missionConfig: missionConfig));
 
-    var placemarks = _generateDjiPlacemarks(listenables);
+    final routeFolders = _generateDjiFolders(listenables);
 
-    if (placemarks.isEmpty) {
+    if (routeFolders.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text("No waypoints to export. Please add waypoints first")));
       return;
@@ -75,11 +76,7 @@ class ExportBarState extends State<ExportBar> {
     var waylines = WaylinesWpml(
         document: WpmlDocumentElement(
             missionConfig: missionConfig,
-            folderElement: FolderElement(
-                templateId: 0, // Only one mission, so this is always 0
-                waylineId: 0, // Only one wayline, so this is always 0
-                speed: listenables.speed,
-                placemarks: placemarks)));
+            folderElements: routeFolders));
 
     var templateString = template.toXmlString(pretty: true);
     var waylinesString = waylines.toXmlString(pretty: true);
@@ -228,11 +225,91 @@ class ExportBarState extends State<ExportBar> {
     return waypoints;
   }
 
-  List<Placemark> _generateDjiPlacemarks(ValueListenables listenables) {
+  List<FolderElement> _generateDjiFolders(ValueListenables listenables) {
+    if (listenables.mappingRoutes.isEmpty) {
+      return listenables.photoLocations.isEmpty
+          ? []
+          : [
+              _generateDjiFolder(
+                listenables: listenables,
+                waylineId: 0,
+                waypoints: listenables.photoLocations,
+                gimbalPitch: listenables.cameraAngle,
+              )
+            ];
+    }
+
+    final routes = listenables.mappingRoutes;
+
+    return [
+      for (int routeIndex = 0; routeIndex < routes.length; routeIndex++)
+        if (routes[routeIndex].waypoints.isNotEmpty)
+          _generateDjiFolder(
+            listenables: listenables,
+            waylineId: routeIndex,
+            waypoints: routes[routeIndex].waypoints,
+            gimbalPitch: routes[routeIndex].gimbalPitch,
+            headingAngle: routes[routeIndex].headingAngle,
+          )
+    ];
+  }
+
+  FolderElement _generateDjiFolder({
+    required ValueListenables listenables,
+    required int waylineId,
+    required List<LatLng> waypoints,
+    required int gimbalPitch,
+    int? headingAngle,
+  }) {
+    final distance = DroneMappingEngine.calculateTotalDistance(waypoints);
+
+    return FolderElement(
+      templateId: 0,
+      waylineId: waylineId,
+      distance: distance.round(),
+      duration: (distance / listenables.speed).round(),
+      speed: listenables.speed,
+      placemarks: _generateDjiPlacemarks(
+        listenables,
+        waypoints,
+        gimbalPitch,
+        headingAngle,
+      ),
+    );
+  }
+
+  List<Placemark> _generateDjiPlacemarks(
+    ValueListenables listenables,
+    List<LatLng> routeWaypoints,
+    int gimbalPitch,
+    int? headingAngle,
+  ) {
     var placemarks = <Placemark>[];
 
-    for (var photoLocation in listenables.photoLocations) {
-      int id = listenables.photoLocations.indexOf(photoLocation);
+    for (int id = 0; id < routeWaypoints.length; id++) {
+      final photoLocation = routeWaypoints[id];
+      final actions = <Action>[];
+
+      if (id == 0) {
+        actions.add(Action(
+            id: actions.length,
+            actionFunction: ActionFunction.gimbalEvenlyRotate,
+            actionParams: GimbalRotateParams(
+                pitch: gimbalPitch.toDouble(), payloadPosition: 0)));
+      }
+      if (listenables.delayAtWaypoint > 0) {
+        actions.add(Action(
+            id: actions.length,
+            actionFunction: ActionFunction.hover,
+            actionParams: HoverParams(hoverTime: listenables.delayAtWaypoint)));
+      }
+      if (listenables.createCameraPoints) {
+        actions.add(Action(
+            id: actions.length,
+            actionFunction: ActionFunction.takePhoto,
+            actionParams: CameraControlParams(payloadPosition: 0)));
+      }
+
       placemarks.add(Placemark(
           point: WaypointPoint(
               longitude: photoLocation.longitude,
@@ -241,39 +318,26 @@ class ExportBarState extends State<ExportBar> {
           height: listenables.altitude,
           speed: listenables.speed,
           headingParam: HeadingParam(
-              headingMode: HeadingMode.followWayline,
+              headingMode: headingAngle == null
+                  ? HeadingMode.followWayline
+                  : HeadingMode.smoothTransition,
+              headingAngle: headingAngle,
+              headingAngleEnable: headingAngle != null,
               headingPathMode: HeadingPathMode.followBadArc),
           turnParam: TurnParam(
               waypointTurnMode:
                   WaypointTurnMode.toPointAndStopWithDiscontinuityCurvature,
               turnDampingDistance: 0),
           useStraightLine: true,
-          actionGroup: ActionGroup(
-              id: 0,
-              startIndex: id,
-              endIndex: id,
-              actions: [
-                if (id == 0)
-                  Action(
-                      id: id,
-                      actionFunction: ActionFunction.gimbalEvenlyRotate,
-                      actionParams: GimbalRotateParams(
-                          pitch: listenables.cameraAngle.toDouble(),
-                          payloadPosition: 0)),
-                if (listenables.delayAtWaypoint > 0)
-                  Action(
-                      id: id,
-                      actionFunction: ActionFunction.hover,
-                      actionParams:
-                          HoverParams(hoverTime: listenables.delayAtWaypoint)),
-                if (listenables.createCameraPoints)
-                  Action(
-                      id: id,
-                      actionFunction: ActionFunction.takePhoto,
-                      actionParams: CameraControlParams(payloadPosition: 0)),
-              ],
-              mode: ActionMode.sequence,
-              trigger: ActionTriggerType.reachPoint)));
+          actionGroup: actions.isEmpty
+              ? null
+              : ActionGroup(
+                  id: id,
+                  startIndex: id,
+                  endIndex: id,
+                  actions: actions,
+                  mode: ActionMode.sequence,
+                  trigger: ActionTriggerType.reachPoint)));
     }
 
     return placemarks;
